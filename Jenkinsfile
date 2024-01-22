@@ -29,7 +29,7 @@ pipeline {
             }
         }
 
-         stage('SonarQube Analysis') {
+        stage('SonarQube Analysis') {
             steps {
                 echo 'sonar running'
                 withSonarQubeEnv('sonar') {
@@ -38,6 +38,54 @@ pipeline {
                 }
             }
         }
-        
+        stage('OWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: ' --scan ./', odcInstallation: 'DC'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "mvn package -DskipTests=true"
+            }
+        }
+        stage('Deploy To Nexus') {
+            steps {
+                withMaven(globalMavenSettingsConfig: 'global-maven', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+                   sh "mvn deploy -DskipTests=true"
+                }
+            }
+        }
+        stage('Docker Build & tag Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName:'docker') {
+                        sh "docker build -t devesh121/ekart:latest -f docker/Dockerfile ."
+                    }
+                }
+            }
+        }
+        stage('Trivy Scan') {
+            steps {
+                sh "trivy image devesh121/ekart:latest > trivy-report.txt "
+            }
+        }
+        stage('Docker Push Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName:'docker') {
+                        sh "docker push devesh121/ekart:latest"
+                    }
+                }
+            }
+        }
+        stage('Kubernetes Deploy') {
+            steps {
+                withKubeConfig(caCertificate: '', clusterName: '', contextName:'', credentialsId: 'k8-token', namespace: 'webapps', restrictKubeConfigAccess:false, serverUrl: 'https://172.31.8.162:6443') {
+                        sh "kubectl apply -f deploymentservice.yml -n webapps"
+                        sh "kubectl get svc -n webapps"
+                }
+            }
+        }
     }
 }
