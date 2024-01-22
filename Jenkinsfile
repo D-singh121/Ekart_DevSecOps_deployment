@@ -1,7 +1,7 @@
 pipeline {
     agent any
     
-    tools { maven 'maven3.6'
+    tools { maven 'maven3'
             jdk 'jdk11'       
     }
     environment {
@@ -25,7 +25,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 echo 'Running the Test'
-                sh " mvn-test -DskipTests=true"
+                sh " mvn test -DskipTests=true"
             }
         }
 
